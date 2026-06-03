@@ -73,7 +73,7 @@ public final class KeyboardMonitor: @unchecked Sendable {
             let nsEvent = NSEvent(cgEvent: event),
             let chars   = nsEvent.characters,
             let char    = chars.first,
-            !char.isControl
+            char.isPrintable
         else { return }
 
         onChar?(char)
@@ -89,5 +89,18 @@ public final class KeyboardMonitor: @unchecked Sendable {
     public static func requestAccessibility() {
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         AXIsProcessTrustedWithOptions(opts)
+    }
+}
+
+// MARK: - Character helpers
+
+private extension Character {
+    /// True for printable characters (excludes control codes like Escape, Arrow keys, etc.)
+    var isPrintable: Bool {
+        guard let ascii = self.asciiValue else {
+            // Non-ASCII printable characters (accented, emoji, etc.)
+            return !self.unicodeScalars.allSatisfy { $0.value < 32 }
+        }
+        return ascii >= 32 && ascii != 127
     }
 }

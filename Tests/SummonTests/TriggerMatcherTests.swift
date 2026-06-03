@@ -65,12 +65,15 @@ final class TriggerMatcherTests: XCTestCase {
     }
 
     func testBackspaceReducesBuffer() {
+        // Type ";add", backspace twice → buffer = ";a", then type "ddr" → ";addr" → matches
         for ch in ";add" { _ = matcher.process(char: ch, against: snippets) }
-        matcher.handleBackspace() // removes 'd'
+        matcher.handleBackspace() // buffer = ";ad"
+        matcher.handleBackspace() // buffer = ";a"
+        let r1 = matcher.process(char: "d", against: snippets); XCTAssertNil(r1)
+        let r2 = matcher.process(char: "d", against: snippets); XCTAssertNil(r2)
         let result = matcher.process(char: "r", against: snippets)
-        // Buffer is now ";addr" → should match
-        // (Actually after backspace buffer = ";add", then "r" appended = ";addr" which matches with no preceding char)
         XCTAssertNotNil(result)
+        XCTAssertEqual(result?.trigger, ";addr")
     }
 
     func testExpandingFlagSuppressesMatches() {
