@@ -1,3 +1,8 @@
+---
+name: summon-add
+description: "Add a new text snippet to Summon. Trigger phrases: add a snippet, create a snippet, new snippet, summon add, add trigger, teach summon."
+---
+
 # summon-add
 
 Add a new snippet to Summon.

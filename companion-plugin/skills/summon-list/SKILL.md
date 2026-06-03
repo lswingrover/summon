@@ -1,3 +1,8 @@
+---
+name: summon-list
+description: "List all snippets in the Summon text expander. Trigger phrases: list my snippets, show my snippets, what snippets do I have, summon list, show all triggers."
+---
+
 # summon-list
 
 List all snippets in the Summon text expander.

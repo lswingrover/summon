@@ -1,3 +1,8 @@
+---
+name: summon-search
+description: "Search snippets by keyword across trigger, expansion, and label. Trigger phrases: find a snippet, search snippets, do I have a snippet for, what's my trigger for, summon search."
+---
+
 # summon-search
 
 Search snippets by keyword.
