@@ -10,7 +10,7 @@ struct SummonApp: App {
 
     var body: some Scene {
         // ── Menu bar ─────────────────────────────────────────────────────────
-        MenuBarExtra("Summon", image: "MenuBarIcon") {
+        MenuBarExtra("Summon", systemImage: "s.circle.fill") {
             MenuBarView()
                 .environmentObject(appState)
                 .environmentObject(updateChecker)
