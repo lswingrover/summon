@@ -5,16 +5,85 @@ import SummonCore
 @main
 struct SummonApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var appState      = SummonAppState.shared
+    @StateObject private var updateChecker = UpdateChecker()
 
     var body: some Scene {
-        Settings { EmptyView() }
+        // ── Menu bar ─────────────────────────────────────────────────────────
+        MenuBarExtra("Summon", image: "MenuBarIcon") {
+            MenuBarView()
+                .environmentObject(appState)
+                .environmentObject(updateChecker)
+                .onAppear {
+                    appState.refreshAccessibility()
+                    appState.refreshSnippetCount()
+                    updateChecker.checkInBackground()
+                }
+        }
+        .menuBarExtraStyle(.menu)
+
+        // ── Snippet Manager ───────────────────────────────────────────────────
+        Window("Snippet Manager", id: "snippets") {
+            SnippetManagerView(store: AppDelegate.shared.store)
+                .environmentObject(appState)
+                .onAppear {
+                    NSApp.setActivationPolicy(.regular)
+                    NSApp.activate(ignoringOtherApps: true)
+                    appState.refreshSnippetCount()
+                }
+                .onDisappear {
+                    appState.refreshSnippetCount()
+                    setAccessoryIfNoWindows()
+                }
+        }
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 720, height: 520)
+        .keyboardShortcut("s", modifiers: [.command, .shift])
+
+        // ── Preferences ───────────────────────────────────────────────────────
+        Window("Preferences", id: "prefs") {
+            PreferencesView()
+                .environmentObject(appState)
+                .environmentObject(updateChecker)
+                .onAppear {
+                    NSApp.setActivationPolicy(.regular)
+                    NSApp.activate(ignoringOtherApps: true)
+                    appState.refreshAccessibility()
+                }
+                .onDisappear { setAccessoryIfNoWindows() }
+        }
+        .windowResizability(.contentSize)
+        .defaultSize(width: 480, height: 320)
+        .keyboardShortcut(",", modifiers: .command)
+
+        // ── About ─────────────────────────────────────────────────────────────
+        Window("About Summon", id: "about") {
+            AboutView()
+                .environmentObject(updateChecker)
+                .onAppear {
+                    NSApp.setActivationPolicy(.regular)
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+                .onDisappear { setAccessoryIfNoWindows() }
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+    }
+
+    /// Drop back to accessory (no Dock icon) only when all windows are closed.
+    private func setAccessoryIfNoWindows() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            let open = NSApp.windows.filter { $0.isVisible }
+            if open.isEmpty { NSApp.setActivationPolicy(.accessory) }
+        }
     }
 }
 
+// MARK: - AppDelegate
+
 final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
-    var statusItem: NSStatusItem?
-    var snippetWindow: NSWindow?
-    var aboutWindow:   NSWindow?
+    static weak var shared: AppDelegate!
 
     let store    = SnippetStore()
     let monitor  = KeyboardMonitor()
@@ -22,82 +91,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
     let injector = ExpansionInjector()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppDelegate.shared = self
         NSApp.setActivationPolicy(.accessory)
-        setupMenuBar()
-        setupExpansionPipeline()
-        checkAccessibility()
+
+        // Wire shared state back-refs
+        let state = SummonAppState.shared
+        state.monitor = monitor
+        state.store   = store
+        state.refreshSnippetCount()
+
+        // Start companion API
         CompanionServer.shared.start(store: store)
-    }
 
-    // MARK: - Menu bar
+        // Wire expansion pipeline
+        setupExpansionPipeline()
 
-    private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        guard let button = statusItem?.button else { return }
-        button.image = NSImage(systemSymbolName: "s.circle.fill", accessibilityDescription: "Summon")
-        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        button.action = #selector(statusBarClicked)
-        button.target = self
-    }
-
-    @objc private func statusBarClicked(_ sender: NSStatusBarButton) {
-        let event = NSApp.currentEvent
-        if event?.type == .rightMouseUp {
-            showContextMenu()
+        // Check accessibility — start monitor only if already granted
+        if KeyboardMonitor.isAccessibilityGranted() {
+            if SummonAppState.shared.isEnabled { monitor.start() }
         } else {
-            toggleSnippetManager()
+            showAccessibilityAlert()
         }
-    }
-
-    private func showContextMenu() {
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Open Snippet Manager", action: #selector(openSnippetManager), keyEquivalent: ""))
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "About Summon", action: #selector(showAbout), keyEquivalent: ""))
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit Summon", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        for item in menu.items { item.target = self }
-        statusItem?.menu = menu
-        statusItem?.button?.performClick(nil)
-        statusItem?.menu = nil
-    }
-
-    @objc func toggleSnippetManager() {
-        if let w = snippetWindow, w.isVisible { w.close() } else { openSnippetManager() }
-    }
-
-    @objc func openSnippetManager() {
-        if snippetWindow == nil {
-            let hosting = NSHostingView(rootView: SnippetManagerView(store: store))
-            let w = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 720, height: 520),
-                styleMask: [.titled, .closable, .resizable, .miniaturizable],
-                backing: .buffered, defer: false
-            )
-            w.title = "Summon — Snippet Manager"
-            w.contentView = hosting
-            w.center()
-            w.setFrameAutosaveName("SummonManager")
-            snippetWindow = w
-        }
-        snippetWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    @objc func showAbout() {
-        if aboutWindow == nil {
-            let w = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 300, height: 220),
-                styleMask: [.titled, .closable],
-                backing: .buffered, defer: false
-            )
-            w.title = "About Summon"
-            w.contentView = NSHostingView(rootView: AboutView())
-            w.center()
-            aboutWindow = w
-        }
-        aboutWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: - Expansion pipeline
@@ -111,7 +125,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
                 let active = await self.store.activeSnippets
                 if let match = self.matcher.process(char: char, against: active) {
                     await MainActor.run {
-                        self.injector.inject(expansion: match.expansion, triggerLength: match.trigger.count)
+                        self.injector.inject(
+                            expansion: match.expansion,
+                            triggerLength: match.trigger.count
+                        )
                     }
                 }
             }
@@ -120,20 +137,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @unchecked Sendable {
         monitor.onBackspace = { [weak self] in
             self?.matcher.handleBackspace()
         }
-
-        monitor.start()
     }
 
     // MARK: - Accessibility
 
-    private func checkAccessibility() {
-        guard !KeyboardMonitor.isAccessibilityGranted() else { return }
+    private func showAccessibilityAlert() {
         KeyboardMonitor.requestAccessibility()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             let alert = NSAlert()
-            alert.messageText = "Accessibility Permission Required"
-            alert.informativeText = "Summon needs Accessibility access to detect your trigger shortcuts and expand them system-wide.\n\nGo to System Settings > Privacy & Security > Accessibility and enable Summon, then relaunch."
-            alert.alertStyle = .warning
+            alert.messageText     = "Accessibility Permission Required"
+            alert.informativeText = "Summon needs Accessibility access to detect your trigger shortcuts system-wide.\n\nGo to System Settings → Privacy & Security → Accessibility and enable Summon, then relaunch."
+            alert.alertStyle      = .warning
             alert.addButton(withTitle: "Open System Settings")
             alert.addButton(withTitle: "Later")
             if alert.runModal() == .alertFirstButtonReturn {
