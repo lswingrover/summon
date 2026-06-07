@@ -29,6 +29,26 @@ Summon fills a specific gap: a native macOS text expander that is completely fre
 
 ---
 
+
+**How Summon compares to the field:**
+
+| | TextExpander | Espanso | Alfred Snippets | Raycast Snippets | Summon |
+|---|---|---|---|---|---|
+| **Price** | $40/year | Free | Requires Alfred ($35 Powerpack) | Pro subscription | Free |
+| **GUI** | Yes | No (YAML config files) | Basic | Good | Yes (native SwiftUI) |
+| **Companion API** | No | No | No | No | Yes -- full REST at localhost:14732 |
+| **AI management** | No | No | No | Via Raycast AI | Yes -- Claude reads and writes library |
+| **Dynamic content** | Date/time/fill-in/scripts | Yes (scripts, shell, regex) | Date/time | Date/time/clipboard | Planned (Phase 2) |
+| **Fill-in fields** | Yes | Yes | No | No | Planned (Phase 2) |
+| **Cloud sync** | Yes (required) | No | No | Yes (required for team) | No (local SQLite, by design) |
+| **Cross-platform** | Mac + Windows + iOS | Mac + Windows + Linux | Mac only | Mac only | Mac only (intentionally) |
+| **Open source** | No | Yes (MIT) | No | No | Yes (MIT) |
+| **System-wide** | Yes | Yes | Yes | Yes | Yes (CGEventTap) |
+
+TextExpander is the category standard and it's worth paying for if you use fill-in fields or team sharing heavily. For individual Mac users who just want a text expander that works, is free, and lets Claude manage their snippet library, the subscription overhead doesn't make sense.
+
+The Espanso gap: Espanso is more powerful (regex matching, shell scripts, multi-step expansions), but the YAML-file workflow means maintaining your snippet library feels like maintaining config files. There is no GUI. There is no way to tell Claude "add a snippet for X" and have it work immediately.
+
 ## Features
 
 ### System-wide expansion
